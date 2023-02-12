@@ -1,0 +1,66 @@
+# SPDX-FileCopyrightText: © Vegard IT GmbH (https://vegardit.com) and contributors
+# SPDX-FileContributor: Sebastian Thomschke, Vegard IT GmbH
+# SPDX-License-Identifier: Apache-2.0
+#
+# https://docs.github.com/en/actions/creating-actions/creating-a-composite-action
+name: (Yet Another) Setup yq
+description: Installs the yq command-line YAML, JSON, XML, CSV and properties parser/processor on Linux, macOS and Windows runners
+author: Vegard IT GmbH (https://vegardit.com)
+branding:
+  color: green
+  icon: package
+
+inputs:
+  version:
+    default: any
+    description: "yq version to install: 'any', 'latest', or a version number, e.g. '4.30.8'"
+  use-cache:
+    default: 'true'
+    description: if the downloaded yq binary should be cached using the GHA caching service 
+
+outputs:
+  path:
+    value: ${{ steps.YQ-SETUP.outputs.path }}
+    description: Path to the yq executable
+  version:
+    value: ${{ steps.YQ-SETUP.outputs.version }}
+    description: Version of the installed yq program
+
+runs:
+  using: 'composite'
+  steps:
+  
+    ##################################################
+    # Setup Cache
+    ##################################################
+    - name: 'yq: cache restore'
+      id: YQ-CACHE
+      if: ${{ (inputs.use-cache == true || inputs.use-cache == 'true') && !env.ACT }} # https://github.com/nektos/act#skipping-steps
+      uses: actions/cache/restore@v3 # https://github.com/actions/cache/tree/main/restore
+      with:
+        path: ${{ runner.temp }}/yq
+        key: ${{ runner.os }}-yq-${{ inputs.version }}
+
+    ##################################################
+    # Install yq
+    ##################################################
+    - name: 'yq: setup'
+      id: YQ-SETUP
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }} # required by "gh actions-cache delete"
+      run: |
+        echo '::group::setup: yq'
+        INPUTS_VERSION='${{ inputs.version }}'
+        INPUTS_USE_CACHE='${{ inputs.use-cache }}'
+        CACHE_HIT='${{ steps.YQ-CACHE.outputs.cache-hit }}'
+        CACHE_CACHE_KEY='${{ steps.YQ-CACHE.outputs.cache-primary-key }}'
+        source gha-setup-yq.sh
+        echo '::endgroup::'
+
+    - name: 'yq: cache update'
+      uses: actions/cache/save@v3
+      if: ${{ steps.YQ-SETUP.outputs.need_cache_update == 'true' }}
+      with:
+        path: ${{ runner.temp }}/yq
+        key: ${{ steps.YQ-CACHE.outputs.cache-primary-key }}
